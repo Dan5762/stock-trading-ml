@@ -1,62 +1,51 @@
-import os
-
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
-from palettable.colorbrewer.diverging import RdYlGn_4
 
 
-def evaluate_earnings_classifier(x_test, y_test, model, target_stock, real_price):
-    target_real_price = real_price[:, target_stock]
+def evaluate_earnings(dates_pred, y_preds, dates_true, y_true, dates, y_real, target_stock, symbol):
+    target_stock_pred = y_preds[:, target_stock]
+    target_stock_true = y_true[:, target_stock]
+    target_stock_real = y_real[:, target_stock]
 
-    test_data_predictions = model.predict(x_test)
-    target_stock_predictions = test_data_predictions[:, target_stock]
-    target_stock_true = y_test[:, target_stock]
-
-    plt.figure(1)
     plt.subplot(211)
-    plt.plot(target_real_price)
-    plt.subplot(212)
-    plt.plot(target_stock_predictions, label='pred')
-    plt.plot(target_stock_true, label='true')
+    plt.plot(dates_pred, target_stock_pred, label='pred')
+    plt.plot(dates_true, target_stock_true, label='true')
     plt.legend()
+    plt.subplot(212)
+    plt.suptitle(symbol)
+    plt.plot(dates, target_stock_real)
 
-    xy = np.array([np.arange(0, len(target_real_price), step=1), target_real_price]).T.reshape(-1, 1, 2)
-    segments = np.hstack([xy[:-1], xy[1:]])
-
-    plt.figure(2)
-
-    cmap = RdYlGn_4.mpl_colormap
-
-    for idx, segment in enumerate(segments):
-        color = cmap(target_stock_predictions[idx])
-        plt.plot(segment.T[0], segment.T[1], c=color)
-
-    wallet = 1
-    state = 'sell'
-    for idx, target_stock_prediction in enumerate(target_stock_predictions):
-        if target_stock_prediction > 0.5 and idx < (len(target_stock_predictions) - 1):
+    wallet, ideal_wallet = 1, 1
+    state, ideal_state = 'sell', 'sell'
+    for idx, target_stock_prediction in enumerate(target_stock_pred):
+        if target_stock_prediction > 0.5 and idx < (len(target_stock_pred) - 1):
             if state != 'buy':
-                bought_val = target_real_price[idx]
+                bought_val = target_stock_real[idx]
                 state = 'buy'
-                plt.plot(idx, target_real_price[idx], '.', markersize=20, color='green')
+                plt.plot(dates[idx], target_stock_real[idx], '.', markersize=20, color='green')
         else:
             if state != 'sell':
-                sold_val = target_real_price[idx]
+                sold_val = target_stock_real[idx]
                 delta = (sold_val - bought_val) / bought_val
                 wallet = wallet * (1 + delta)
                 state = 'sell'
-                plt.plot(idx, target_real_price[idx], '.', markersize=20, color='red')
+                plt.plot(dates[idx], target_stock_real[idx], '.', markersize=20, color='red')
+
+        if idx < (len(target_stock_true) - 1) and target_stock_true[idx] > 0.5:
+            if ideal_state != 'buy':
+                ideal_bought_val = target_stock_real[idx]
+                ideal_state = 'buy'
+        elif idx <= (len(target_stock_true) - 1):
+            if ideal_state != 'sell':
+                ideal_sold_val = target_stock_real[idx]
+                delta = (ideal_sold_val - ideal_bought_val) / ideal_bought_val
+                ideal_wallet = ideal_wallet * (1 + delta)
+                ideal_state = 'sell'
 
     print(f"Profit: {round(wallet * 100)}%")
-    print(f"Base profit: {round((target_real_price[-1] / target_real_price[0]) * 100)}%\n")
+    print(f"Ideal Profit: {round(ideal_wallet * 100)}%")
+    print(f"Base profit: {round((target_stock_real[-1] / target_stock_real[0]) * 100)}%\n")
 
-    # plt.figure(1)
     # plt.show()
-    plt.close(1)
+    plt.close()
 
-    # plt.figure(2)
-    # plt.show()
-    plt.close(2)
-
-    return wallet, target_real_price[-1] / target_real_price[0]
+    return wallet, target_stock_real[-1] / target_stock_real[0], ideal_wallet
